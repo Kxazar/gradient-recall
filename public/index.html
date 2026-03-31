@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gradient Recall</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">OpenGradient demo</p>
+          <h1>Gradient Recall</h1>
+          <p class="lede">
+            A small local app that sends verified prompts through OpenGradient x402 and keeps cloud memory in
+            Supabase.
+          </p>
+          <div class="hero-badges">
+            <span>TEE-verified inference</span>
+            <span>Base Sepolia payments</span>
+            <span>Supabase cloud memory</span>
+          </div>
+        </div>
+        <div class="status-card">
+          <div class="status-row">
+            <span>Model</span>
+            <strong id="modelValue">Loading...</strong>
+          </div>
+          <div class="status-row">
+            <span>Settlement</span>
+            <strong id="settlementValue">Loading...</strong>
+          </div>
+          <div class="status-row">
+            <span>x402 wallet</span>
+            <strong id="walletStatus">Checking...</strong>
+          </div>
+          <div class="status-row">
+            <span>Supabase</span>
+            <strong id="memoryStatus">Checking...</strong>
+          </div>
+          <p class="hint" id="setupHint">
+            Add your keys to <code>.env</code>, then refresh this page.
+          </p>
+        </div>
+      </section>
+
+      <main class="workspace">
+        <section class="panel panel-chat">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Conversation</p>
+              <h2>Verified assistant</h2>
+            </div>
+            <p class="thread-chip" id="threadChip">Thread: pending</p>
+          </div>
+
+          <div class="chat-log" id="chatLog">
+            <article class="message message-assistant">
+              <p class="message-role">assistant</p>
+              <p>
+                Ask something about a project, product idea, or your current work. If Supabase memory is configured, I
+                will pull relevant saved context into the answer.
+              </p>
+            </article>
+          </div>
+
+          <form class="composer" id="composer">
+            <label class="sr-only" for="promptInput">Your message</label>
+            <textarea
+              id="promptInput"
+              name="message"
+              rows="4"
+              placeholder="For example: Help me design a launch plan for my privacy-focused AI writing tool."
+            ></textarea>
+            <div class="composer-row">
+              <p class="composer-note" id="composerNote">Ready when you are.</p>
+              <button id="sendButton" type="submit">Send</button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="panel panel-memory">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">Memory</p>
+              <h2>Cloud memory</h2>
+            </div>
+          </div>
+
+          <section class="memory-block">
+            <h3>Memory summary</h3>
+            <p id="userBio">Supabase memory summary not loaded yet.</p>
+          </section>
+
+          <section class="memory-block">
+            <h3>Cloud insights</h3>
+            <ul id="insightsList" class="token-list">
+              <li>Waiting for profile data.</li>
+            </ul>
+          </section>
+
+          <section class="memory-block">
+            <h3>Latest recalled context</h3>
+            <ul id="memoryList" class="memory-list">
+              <li>No memory search has been run yet.</li>
+            </ul>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
