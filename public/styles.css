@@ -227,6 +227,10 @@ button[type="submit"] {
   box-shadow: 0 14px 26px rgba(18, 31, 42, 0.18);
 }
 
+.identity-card .wallet-action {
+  margin-right: 6px;
+}
+
 .wallet-action:hover:not(:disabled),
 button[type="submit"]:hover:not(:disabled),
 .prompt-chip:hover {
@@ -474,6 +478,10 @@ button[type="submit"] {
   .wallet-action,
   button[type="submit"] {
     width: 100%;
+  }
+
+  .identity-card .wallet-action {
+    margin-right: 0;
   }
 
   .chat-log {
