@@ -12,6 +12,14 @@ import {
   normalizeOpenGradientModel,
   normalizeOpenGradientSettlementType
 } from "./lib/opengradient.js";
+import {
+  createChallenge,
+  createGuestSession,
+  createWalletSession,
+  ensureSession,
+  serializeSessionCookie,
+  verifyWalletSignature
+} from "./lib/session-auth.js";
 import { createSupabaseMemoryStore } from "./lib/supabase-memory.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -27,6 +35,12 @@ const config = {
   teeRegistryAddress: process.env.OG_TEE_REGISTRY_ADDRESS || DEFAULT_TEE_REGISTRY_ADDRESS,
   pythonExecutable: process.env.OG_PYTHON_EXECUTABLE || "",
   openGradientKey: process.env.OG_PRIVATE_KEY || "",
+  sessionSecret:
+    process.env.APP_SESSION_SECRET ||
+    process.env.OG_PRIVATE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    "gradient-recall-dev-secret",
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseKey: process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   supabaseUserId: process.env.SUPABASE_USER_ID || "local-demo-user",
@@ -72,9 +86,10 @@ function getMimeType(filePath) {
   return "text/html; charset=utf-8";
 }
 
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
-    "Content-Type": "application/json; charset=utf-8"
+    "Content-Type": "application/json; charset=utf-8",
+    ...headers
   });
   response.end(JSON.stringify(payload));
 }
@@ -181,11 +196,32 @@ async function serveStatic(requestPath, response) {
   }
 }
 
+function isSecureRequest(request) {
+  return (request.headers["x-forwarded-proto"] || "").split(",")[0]?.trim() === "https";
+}
+
+function getSessionHeaders(request, sessionToken) {
+  if (!sessionToken) {
+    return {};
+  }
+
+  return {
+    "Set-Cookie": serializeSessionCookie(sessionToken, isSecureRequest(request))
+  };
+}
+
 async function handleChat(request, response) {
+  const { session, token: sessionToken } = ensureSession(request.headers.cookie || "", config.sessionSecret);
+
   if (!openGradientClient) {
-    sendJson(response, 500, {
-      error: "OG_PRIVATE_KEY is not configured yet. Add it to .env before sending chat requests."
-    });
+    sendJson(
+      response,
+      500,
+      {
+        error: "OG_PRIVATE_KEY is not configured yet. Add it to .env before sending chat requests."
+      },
+      getSessionHeaders(request, sessionToken)
+    );
     return;
   }
 
@@ -196,7 +232,7 @@ async function handleChat(request, response) {
   const threadId = incomingThreadId || randomUUID();
 
   if (!message) {
-    sendJson(response, 400, { error: "Message is required." });
+    sendJson(response, 400, { error: "Message is required." }, getSessionHeaders(request, sessionToken));
     return;
   }
 
@@ -205,7 +241,7 @@ async function handleChat(request, response) {
 
   if (memoryStore.isConfigured()) {
     try {
-      memorySearchResult = await memoryStore.search(message);
+      memorySearchResult = await memoryStore.search(message, session.userId);
       memoryStatus = "ok";
     } catch (error) {
       memoryStatus = error.message;
@@ -234,7 +270,8 @@ async function handleChat(request, response) {
           messages: [
             { role: "user", content: message },
             { role: "assistant", content: result.content }
-          ]
+          ],
+          userId: session.userId
         });
       } catch (error) {
         memoryStatus = memoryStatus === "ok" ? error.message : memoryStatus;
@@ -242,6 +279,7 @@ async function handleChat(request, response) {
     }
 
     sendJson(response, 200, {
+      session,
       threadId,
       answer: result.content,
       usage: result.usage,
@@ -252,42 +290,56 @@ async function handleChat(request, response) {
       stats: memorySearchResult?.stats || null,
       insights: memorySearchResult?.insights || [],
       memories: memorySearchResult?.memories || []
-    });
+    }, getSessionHeaders(request, sessionToken));
   } catch (error) {
     const errorMessage = error.message || "OpenGradient request failed.";
 
     if (errorMessage.includes("402 Payment Required")) {
       const walletStatus = await openGradientClient.getWalletStatus().catch(() => null);
-      sendJson(response, 402, {
-        error: formatOpenGradientPaymentError(errorMessage, walletStatus),
-        walletStatus
-      });
+      sendJson(
+        response,
+        402,
+        {
+          error: formatOpenGradientPaymentError(errorMessage, walletStatus),
+          walletStatus
+        },
+        getSessionHeaders(request, sessionToken)
+      );
       return;
     }
 
-    sendJson(response, 502, { error: errorMessage });
+    sendJson(response, 502, { error: errorMessage }, getSessionHeaders(request, sessionToken));
   }
 }
 
-async function handleProfile(response) {
+async function handleProfile(request, response) {
+  const { session, token: sessionToken } = ensureSession(request.headers.cookie || "", config.sessionSecret);
+
   if (!memoryStore.isConfigured()) {
-    sendJson(response, 200, {
-      enabled: false,
-      user_bio: "",
-      insights: [],
-      recent_memories: []
-    });
+    sendJson(
+      response,
+      200,
+      {
+        enabled: false,
+        session,
+        user_bio: "",
+        insights: [],
+        recent_memories: []
+      },
+      getSessionHeaders(request, sessionToken)
+    );
     return;
   }
 
   try {
-    const profile = await memoryStore.getProfile();
+    const profile = await memoryStore.getProfile(session.userId);
     sendJson(response, 200, {
       enabled: true,
+      session,
       ...profile
-    });
+    }, getSessionHeaders(request, sessionToken));
   } catch (error) {
-    sendJson(response, 502, { error: error.message });
+    sendJson(response, 502, { error: error.message }, getSessionHeaders(request, sessionToken));
   }
 }
 
@@ -304,7 +356,75 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && url.pathname === "/api/auth/session") {
+      const { session, token } = ensureSession(request.headers.cookie || "", config.sessionSecret);
+      sendJson(
+        response,
+        200,
+        {
+          session,
+          publicAccess: true,
+          identityMode: "guest-or-wallet"
+        },
+        getSessionHeaders(request, token)
+      );
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/auth/challenge") {
+      const body = await readJsonBody(request);
+      const address = typeof body.address === "string" ? body.address.trim() : "";
+
+      if (!address) {
+        sendJson(response, 400, { error: "Wallet address is required." });
+        return;
+      }
+
+      try {
+        sendJson(response, 200, createChallenge(address, request.headers.host || "localhost", config.sessionSecret));
+      } catch (error) {
+        sendJson(response, 400, { error: error.message || "Failed to create challenge." });
+      }
+
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/auth/verify") {
+      const body = await readJsonBody(request);
+      const address = typeof body.address === "string" ? body.address.trim() : "";
+      const signature = typeof body.signature === "string" ? body.signature.trim() : "";
+      const challenge = typeof body.challenge === "string" ? body.challenge.trim() : "";
+
+      if (!address || !signature || !challenge) {
+        sendJson(response, 400, { error: "Address, signature, and challenge are required." });
+        return;
+      }
+
+      try {
+        await verifyWalletSignature({
+          address,
+          signature,
+          challenge,
+          secret: config.sessionSecret
+        });
+
+        const { session, token } = createWalletSession(address, config.sessionSecret);
+        sendJson(response, 200, { session }, getSessionHeaders(request, token));
+      } catch (error) {
+        sendJson(response, 400, { error: error.message || "Wallet verification failed." });
+      }
+
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/auth/logout") {
+      const { session, token } = createGuestSession(config.sessionSecret);
+      sendJson(response, 200, { session }, getSessionHeaders(request, token));
+      return;
+    }
+
     if (request.method === "GET" && url.pathname === "/api/config") {
+      const { session, token } = ensureSession(request.headers.cookie || "", config.sessionSecret);
       const openGradientStatus = openGradientClient ? await openGradientClient.getStatus() : null;
       const walletStatus = openGradientClient ? await openGradientClient.getWalletStatus().catch(() => null) : null;
 
@@ -314,16 +434,19 @@ const server = createServer(async (request, response) => {
         openGradientRuntime: openGradientStatus?.runtime || "",
         pythonExecutable: openGradientStatus?.pythonExecutable || "",
         endpointStrategy: openGradientStatus?.endpointStrategy || "disabled",
+        publicAccess: true,
+        identityMode: "guest-or-wallet",
+        session,
         hasOpenGradientKey: Boolean(config.openGradientKey),
         walletStatus,
         hasSupabase: memoryStore.isConfigured(),
-        memoryUserId: memoryStore.getUserId()
-      });
+        memoryUserId: session.userId
+      }, getSessionHeaders(request, token));
       return;
     }
 
     if (request.method === "GET" && url.pathname === "/api/profile") {
-      await handleProfile(response);
+      await handleProfile(request, response);
       return;
     }
 

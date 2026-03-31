@@ -84,15 +84,21 @@ export function createSupabaseMemoryStore({
       })
     : null;
 
-  async function fetchRecentRows(limit = lookback) {
+  function resolveUserId(overrideUserId) {
+    return (overrideUserId || userId || "local-demo-user").trim();
+  }
+
+  async function fetchRecentRows(limit = lookback, overrideUserId) {
     if (!supabase) {
       return [];
     }
 
+    const resolvedUserId = resolveUserId(overrideUserId);
+
     const { data, error } = await supabase
       .from(tableName)
       .select("id, thread_id, role, content, created_at")
-      .eq("user_id", userId)
+      .eq("user_id", resolvedUserId)
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -103,15 +109,17 @@ export function createSupabaseMemoryStore({
     return data || [];
   }
 
-  async function fetchCount() {
+  async function fetchCount(overrideUserId) {
     if (!supabase) {
       return 0;
     }
 
+    const resolvedUserId = resolveUserId(overrideUserId);
+
     const { count, error } = await supabase
       .from(tableName)
       .select("*", { count: "exact", head: true })
-      .eq("user_id", userId);
+      .eq("user_id", resolvedUserId);
 
     if (error) {
       throw new Error(error.message);
@@ -125,11 +133,11 @@ export function createSupabaseMemoryStore({
       return Boolean(supabase);
     },
 
-    getUserId() {
-      return userId;
+    getUserId(overrideUserId) {
+      return resolveUserId(overrideUserId);
     },
 
-    async search(query) {
+    async search(query, overrideUserId) {
       if (!supabase) {
         return {
           user_bio: "",
@@ -138,7 +146,8 @@ export function createSupabaseMemoryStore({
         };
       }
 
-      const [rows, totalCount] = await Promise.all([fetchRecentRows(lookback), fetchCount()]);
+      const resolvedUserId = resolveUserId(overrideUserId);
+      const [rows, totalCount] = await Promise.all([fetchRecentRows(lookback, resolvedUserId), fetchCount(resolvedUserId)]);
       const tokens = tokenize(query);
       const ranked = rows
         .map((row, index) => ({
@@ -160,20 +169,22 @@ export function createSupabaseMemoryStore({
         }));
 
       return {
-        ...buildProfile(rows, totalCount, userId),
+        ...buildProfile(rows, totalCount, resolvedUserId),
         memories: selected
       };
     },
 
-    async storeConversation({ threadId, messages }) {
+    async storeConversation({ threadId, messages, userId: overrideUserId }) {
       if (!supabase) {
         return null;
       }
 
+      const resolvedUserId = resolveUserId(overrideUserId);
+
       const rows = messages
         .filter((message) => message && typeof message.content === "string")
         .map((message) => ({
-          user_id: userId,
+          user_id: resolvedUserId,
           thread_id: threadId || "default-thread",
           role: message.role === "assistant" ? "assistant" : "user",
           content: message.content.trim()
@@ -193,15 +204,16 @@ export function createSupabaseMemoryStore({
       return data || [];
     },
 
-    async getProfile() {
+    async getProfile(overrideUserId) {
       if (!supabase) {
         return null;
       }
 
-      const [rows, totalCount] = await Promise.all([fetchRecentRows(12), fetchCount()]);
+      const resolvedUserId = resolveUserId(overrideUserId);
+      const [rows, totalCount] = await Promise.all([fetchRecentRows(12, resolvedUserId), fetchCount(resolvedUserId)]);
 
       return {
-        ...buildProfile(rows, totalCount, userId),
+        ...buildProfile(rows, totalCount, resolvedUserId),
         recent_memories: rows.slice(0, 5).map((row) => ({
           role: row.role,
           content: row.content,

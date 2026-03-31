@@ -8,7 +8,7 @@
     "dev": "node --watch --env-file=.env src/server.js",
     "dev:vercel": "npx.cmd vercel dev",
     "start": "node --env-file=.env src/server.js",
-    "check": "node --check src/server.js && node --check src/lib/opengradient.js && node --check src/lib/supabase-memory.js && node --check public/app.js && node --check scripts/ensure-og-approval.mjs && node --check scripts/check-og-wallet.mjs",
+    "check": "node --check src/server.js && node --check src/lib/opengradient.js && node --check src/lib/session-auth.js && node --check src/lib/supabase-memory.js && node --check public/app.js && node --check scripts/ensure-og-approval.mjs && node --check scripts/check-og-wallet.mjs",
     "og:approve": "node --env-file=.env scripts/ensure-og-approval.mjs",
     "og:wallet": "node --env-file=.env scripts/check-og-wallet.mjs",
     "deploy:vercel": "npx.cmd vercel --prod --yes"
@@ -17,6 +17,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.101.0"
+    "@supabase/supabase-js": "^2.101.0",
+    "viem": "^2.47.6"
   }
 }

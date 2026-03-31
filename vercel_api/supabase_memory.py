@@ -77,11 +77,14 @@ class SupabaseMemoryStore:
         self.config = config
         self.base_url = f"{config.supabase_url}/rest/v1/{config.supabase_memory_table}" if config.supabase_url else ""
 
+    def _resolve_user_id(self, user_id: str | None = None) -> str:
+        return (user_id or self.config.supabase_user_id or "local-demo-user").strip()
+
     def is_configured(self) -> bool:
         return bool(self.config.supabase_url and self.config.supabase_key)
 
-    def get_user_id(self) -> str:
-        return self.config.supabase_user_id
+    def get_user_id(self, user_id: str | None = None) -> str:
+        return self._resolve_user_id(user_id)
 
     def _headers(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         headers = {
@@ -105,30 +108,34 @@ class SupabaseMemoryStore:
         response.raise_for_status()
         return response
 
-    def fetch_recent_rows(self, limit: int) -> list[dict[str, Any]]:
+    def fetch_recent_rows(self, limit: int, user_id: str | None = None) -> list[dict[str, Any]]:
         if not self.is_configured():
             return []
+
+        resolved_user_id = self._resolve_user_id(user_id)
 
         response = self._request(
             "GET",
             params={
                 "select": "id,thread_id,role,content,created_at",
-                "user_id": f"eq.{self.config.supabase_user_id}",
+                "user_id": f"eq.{resolved_user_id}",
                 "order": "created_at.desc",
                 "limit": str(limit),
             },
         )
         return response.json()
 
-    def fetch_count(self) -> int:
+    def fetch_count(self, user_id: str | None = None) -> int:
         if not self.is_configured():
             return 0
+
+        resolved_user_id = self._resolve_user_id(user_id)
 
         response = self._request(
             "GET",
             params={
                 "select": "id",
-                "user_id": f"eq.{self.config.supabase_user_id}",
+                "user_id": f"eq.{resolved_user_id}",
                 "limit": "1",
             },
             headers={
@@ -146,12 +153,13 @@ class SupabaseMemoryStore:
         except ValueError:
             return 0
 
-    def search(self, query: str) -> dict[str, Any]:
+    def search(self, query: str, user_id: str | None = None) -> dict[str, Any]:
         if not self.is_configured():
             return {"user_bio": "", "stats": None, "insights": [], "memories": []}
 
-        rows = self.fetch_recent_rows(self.config.supabase_lookback)
-        total_count = self.fetch_count()
+        resolved_user_id = self._resolve_user_id(user_id)
+        rows = self.fetch_recent_rows(self.config.supabase_lookback, resolved_user_id)
+        total_count = self.fetch_count(resolved_user_id)
         tokens = tokenize(query)
 
         ranked = [
@@ -178,17 +186,19 @@ class SupabaseMemoryStore:
         ]
 
         return {
-            **build_profile(rows, total_count, self.config.supabase_user_id),
+            **build_profile(rows, total_count, resolved_user_id),
             "memories": selected,
         }
 
-    def store_conversation(self, thread_id: str, messages: list[dict[str, str]]) -> None:
+    def store_conversation(self, thread_id: str, messages: list[dict[str, str]], user_id: str | None = None) -> None:
         if not self.is_configured():
             return
 
+        resolved_user_id = self._resolve_user_id(user_id)
+
         rows = [
             {
-                "user_id": self.config.supabase_user_id,
+                "user_id": resolved_user_id,
                 "thread_id": thread_id or "default-thread",
                 "role": "assistant" if message.get("role") == "assistant" else "user",
                 "content": (message.get("content") or "").strip(),
@@ -203,10 +213,11 @@ class SupabaseMemoryStore:
 
         self._request("POST", json_body=rows, headers={"Prefer": "return=minimal"})
 
-    def get_profile(self) -> dict[str, Any]:
-        rows = self.fetch_recent_rows(12)
-        total_count = self.fetch_count()
-        profile = build_profile(rows, total_count, self.config.supabase_user_id)
+    def get_profile(self, user_id: str | None = None) -> dict[str, Any]:
+        resolved_user_id = self._resolve_user_id(user_id)
+        rows = self.fetch_recent_rows(12, resolved_user_id)
+        total_count = self.fetch_count(resolved_user_id)
+        profile = build_profile(rows, total_count, resolved_user_id)
         profile["recent_memories"] = [
             {
                 "role": row.get("role"),

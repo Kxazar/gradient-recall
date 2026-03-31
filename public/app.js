@@ -7,12 +7,13 @@ const composer = document.getElementById("composer");
 const promptInput = document.getElementById("promptInput");
 const composerNote = document.getElementById("composerNote");
 const sendButton = document.getElementById("sendButton");
+const walletActionButton = document.getElementById("walletActionButton");
 const threadChip = document.getElementById("threadChip");
 const modelValue = document.getElementById("modelValue");
 const settlementValue = document.getElementById("settlementValue");
 const walletStatus = document.getElementById("walletStatus");
 const memoryStatus = document.getElementById("memoryStatus");
-const walletBadgeValue = document.getElementById("walletBadgeValue");
+const identityBadgeValue = document.getElementById("identityBadgeValue");
 const runtimeValue = document.getElementById("runtimeValue");
 const setupHint = document.getElementById("setupHint");
 const readinessTitle = document.getElementById("readinessTitle");
@@ -27,14 +28,18 @@ const launchChecklist = document.getElementById("launchChecklist");
 const endpointList = document.getElementById("endpointList");
 const studioModeTag = document.getElementById("studioModeTag");
 
-const storedThreadId = window.localStorage.getItem("gradient-recall-thread") || "";
+const INITIAL_ASSISTANT_COPY = "Anyone can use the studio in guest mode. Connect a wallet if you want a persistent, private memory lane bound to your address.";
+
 const state = {
-  threadId: storedThreadId,
+  threadId: "",
   history: [],
   ready: false,
   activeTab: "overview",
   config: null,
-  profile: null
+  profile: null,
+  session: null,
+  walletBusy: false,
+  providerAvailable: Boolean(window.ethereum?.request)
 };
 
 function formatBalance(value, digits = 4) {
@@ -62,7 +67,15 @@ function formatTimestamp(timestamp) {
   });
 }
 
-function getWalletMeta() {
+function shortAddress(address) {
+  if (!address) {
+    return "Wallet";
+  }
+
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getOperatorWalletMeta() {
   const wallet = state.config?.walletStatus || null;
   const opgBalance = Number(wallet?.opgBalance);
   const ethBalance = Number(wallet?.ethBalance);
@@ -81,6 +94,65 @@ function getWalletMeta() {
 
 function getProfileStats() {
   return state.profile?.stats || null;
+}
+
+function getSessionLabel() {
+  if (!state.session) {
+    return "Guest";
+  }
+
+  return state.session.isWallet ? shortAddress(state.session.address) : state.session.displayName;
+}
+
+function getSessionModeLabel() {
+  if (!state.session) {
+    return "guest mode";
+  }
+
+  return state.session.isWallet ? "wallet lane" : "guest lane";
+}
+
+function getThreadStorageKey(session = state.session) {
+  return `gradient-recall-thread:${session?.storageKey || "guest:bootstrap"}`;
+}
+
+function resetChatLog() {
+  const introCopy = state.session?.isWallet
+    ? `Wallet ${shortAddress(state.session.address)} is connected. Your prompts will now write into a private memory lane scoped to this address.`
+    : INITIAL_ASSISTANT_COPY;
+
+  chatLog.innerHTML = `
+    <article class="message message-assistant">
+      <p class="message-role">assistant</p>
+      <p>${introCopy}</p>
+    </article>
+  `;
+}
+
+function applySession(session, { resetConversation = true } = {}) {
+  const previousStorageKey = state.session?.storageKey || "";
+  const nextStorageKey = session?.storageKey || "";
+  const shouldReset = resetConversation || previousStorageKey !== nextStorageKey;
+
+  state.session = session;
+
+  if (shouldReset) {
+    state.threadId = window.localStorage.getItem(getThreadStorageKey(session)) || "";
+    state.history = [];
+    resetChatLog();
+    state.profile = null;
+  }
+
+  renderThread();
+  renderFromState();
+}
+
+function persistThread() {
+  if (!state.threadId || !state.session?.storageKey) {
+    return;
+  }
+
+  window.localStorage.setItem(getThreadStorageKey(), state.threadId);
 }
 
 function setActiveTab(tabId) {
@@ -106,7 +178,18 @@ function renderThread() {
 function setBusy(isBusy) {
   promptInput.disabled = isBusy || !state.ready;
   sendButton.disabled = isBusy || !state.ready;
-  composerNote.textContent = isBusy ? "OpenGradient is generating a verified response..." : "Ready for the next move.";
+  composerNote.textContent = isBusy ? "OpenGradient is generating a verified response..." : composerNote.textContent || "Ready for the next move.";
+}
+
+function setWalletBusy(isBusy, label = "") {
+  state.walletBusy = isBusy;
+  walletActionButton.disabled = isBusy;
+
+  if (isBusy && label) {
+    walletActionButton.textContent = label;
+  } else {
+    updateWalletActionButton();
+  }
 }
 
 function appendMessage(role, content) {
@@ -125,15 +208,30 @@ function appendMessage(role, content) {
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
+function updateWalletActionButton() {
+  if (state.walletBusy) {
+    return;
+  }
+
+  if (state.session?.isWallet) {
+    walletActionButton.textContent = "Disconnect Wallet";
+    walletActionButton.disabled = false;
+    return;
+  }
+
+  walletActionButton.textContent = state.providerAvailable ? "Connect Wallet" : "Wallet App Needed";
+  walletActionButton.disabled = false;
+}
+
 function renderStatusStack() {
-  const walletMeta = getWalletMeta();
+  const walletMeta = getOperatorWalletMeta();
   const profileStats = getProfileStats();
   const tiles = [
     {
-      label: "Wallet diagnostics",
-      value: walletMeta.wallet
-        ? `${formatBalance(walletMeta.wallet.opgBalance)} OPG / ${formatBalance(walletMeta.wallet.ethBalance, 3)} ETH`
-        : "Waiting for wallet state"
+      label: "Audience access",
+      value: state.session?.isWallet
+        ? `${getSessionLabel()} with private memory`
+        : "Public guest mode is live"
     },
     {
       label: "Cloud recall",
@@ -142,8 +240,10 @@ function renderStatusStack() {
         : "Supabase not configured"
     },
     {
-      label: "Vercel route shape",
-      value: "Static shell + /api/config, /api/profile, /api/chat, /api/health"
+      label: "Operator wallet",
+      value: walletMeta.wallet
+        ? `${formatBalance(walletMeta.wallet.opgBalance)} OPG / ${formatBalance(walletMeta.wallet.ethBalance, 3)} ETH`
+        : "Waiting for operator wallet"
     }
   ];
 
@@ -160,9 +260,13 @@ function renderStatusStack() {
 }
 
 function renderOverviewMetrics() {
-  const walletMeta = getWalletMeta();
   const profileStats = getProfileStats();
   const metrics = [
+    {
+      label: "Identity",
+      value: getSessionLabel(),
+      note: state.session?.isWallet ? "Wallet-linked memory lane" : "Public guest lane"
+    },
     {
       label: "Stored turns",
       value: `${profileStats?.storedMessages || 0}`,
@@ -172,11 +276,6 @@ function renderOverviewMetrics() {
       label: "Threads",
       value: `${profileStats?.threadsSeen || 0}`,
       note: "Conversation groups remembered"
-    },
-    {
-      label: "Permit2",
-      value: `${formatBalance(walletMeta.wallet?.permit2Allowance || 0)} OPG`,
-      note: "Current allowance headroom"
     },
     {
       label: "Latest memory",
@@ -213,7 +312,10 @@ function renderInsights() {
 
 function renderMemories(memories = []) {
   if (!memories.length) {
-    memoryList.innerHTML = '<article class="memory-item">No recalled memory yet. Send a few prompts and this atlas will begin to fill in.</article>';
+    const emptyCopy = state.session?.isWallet
+      ? "Your wallet lane is empty for now. Send a few prompts and this atlas will start mapping your private recall."
+      : "Guest mode is live, but this lane is still empty. Send a few prompts or connect a wallet for persistent recall.";
+    memoryList.innerHTML = `<article class="memory-item">${emptyCopy}</article>`;
     railMemoryPreview.innerHTML = '<article class="mini-memory">Memory preview is waiting for the first successful recall.</article>';
     return;
   }
@@ -246,30 +348,44 @@ function renderMemories(memories = []) {
 }
 
 function renderStudioDetails() {
-  const walletMeta = getWalletMeta();
+  const walletMeta = getOperatorWalletMeta();
   const details = [
+    `Identity lane: ${state.session?.isWallet ? `wallet ${state.session.address}` : "guest mode"}`,
+    `Scoped memory user: ${state.session?.userId || "pending"}`,
     `Model lane: ${state.config?.model || "unknown"}`,
     `Settlement mode: ${state.config?.settlementType || "unknown"}`,
     `Endpoint strategy: ${state.config?.endpointStrategy || "unknown"}`,
     walletMeta.wallet
-      ? `Wallet: ${formatBalance(walletMeta.wallet.opgBalance)} OPG / ${formatBalance(walletMeta.wallet.ethBalance, 3)} ETH`
-      : "Wallet diagnostics pending",
+      ? `Operator wallet: ${formatBalance(walletMeta.wallet.opgBalance)} OPG / ${formatBalance(walletMeta.wallet.ethBalance, 3)} ETH`
+      : "Operator wallet diagnostics pending",
     state.profile?.stats?.latestUserNote
       ? `Latest note: ${state.profile.stats.latestUserNote}`
       : "Latest note: none yet"
   ];
 
   studioDetails.innerHTML = details.map((item) => `<li>${item}</li>`).join("");
-  studioModeTag.textContent = state.ready ? "Studio armed" : "Awaiting env";
+  studioModeTag.textContent = state.ready ? (state.session?.isWallet ? "Wallet lane armed" : "Guest lane armed") : "Awaiting env";
 }
 
 function renderLaunch() {
-  const walletMeta = getWalletMeta();
+  const walletMeta = getOperatorWalletMeta();
   const checks = [
+    {
+      title: "Public access",
+      status: true,
+      note: "Anyone can use the site in guest mode over the public Vercel URL."
+    },
+    {
+      title: "Identity mode",
+      status: true,
+      note: state.session?.isWallet
+        ? `Wallet lane active for ${shortAddress(state.session.address)}`
+        : "Guest lane active. Connect a wallet for persistent memory."
+    },
     {
       title: "OpenGradient key",
       status: state.config?.hasOpenGradientKey,
-      note: state.config?.hasOpenGradientKey ? "Private key is available to the backend." : "Add OG_PRIVATE_KEY in env."
+      note: state.config?.hasOpenGradientKey ? "Backend signing key is available." : "Add OG_PRIVATE_KEY in env."
     },
     {
       title: "Supabase memory",
@@ -277,21 +393,16 @@ function renderLaunch() {
       note: state.config?.hasSupabase ? "Cloud memory routes are online." : "Add SUPABASE_URL and a server-side key."
     },
     {
-      title: "Wallet funded",
+      title: "Operator wallet funded",
       status: walletMeta.hasHealthyOpg && walletMeta.hasHealthyEth,
       note: walletMeta.wallet
         ? `${formatBalance(walletMeta.wallet.opgBalance)} OPG / ${formatBalance(walletMeta.wallet.ethBalance, 3)} ETH`
-        : "Wallet status unavailable"
+        : "Operator wallet status unavailable"
     },
     {
       title: "Permit2 allowance",
       status: walletMeta.hasAllowance,
       note: walletMeta.wallet ? `${formatBalance(walletMeta.wallet.permit2Allowance)} OPG approved` : "Allowance unavailable"
-    },
-    {
-      title: "Vercel API surface",
-      status: true,
-      note: "Python functions mirror the same /api contract as local dev."
     }
   ];
 
@@ -308,10 +419,13 @@ function renderLaunch() {
     .join("");
 
   const routes = [
-    { method: "GET", path: "/api/config", note: "Runtime, wallet, and deployment posture" },
-    { method: "GET", path: "/api/profile", note: "Memory summary, stats, and recent turns" },
-    { method: "POST", path: "/api/chat", note: "Memory-augmented verified inference" },
-    { method: "GET", path: "/api/health", note: "Minimal deployment heartbeat" }
+    { method: "GET", path: "/api/auth/session", note: "Resolve guest or wallet identity for any visitor" },
+    { method: "POST", path: "/api/auth/challenge", note: "Create a wallet signature challenge" },
+    { method: "POST", path: "/api/auth/verify", note: "Verify signature and bind a wallet lane" },
+    { method: "POST", path: "/api/auth/logout", note: "Return to guest mode" },
+    { method: "GET", path: "/api/config", note: "Runtime, operator wallet, and deployment posture" },
+    { method: "GET", path: "/api/profile", note: "Profile + memory scoped to the current lane" },
+    { method: "POST", path: "/api/chat", note: "Memory-augmented verified inference for the current session" }
   ];
 
   endpointList.innerHTML = routes
@@ -330,41 +444,48 @@ function renderLaunch() {
 }
 
 function renderReadinessNarrative() {
-  const walletMeta = getWalletMeta();
+  const walletMeta = getOperatorWalletMeta();
   const profileStats = getProfileStats();
 
   if (!state.config?.hasOpenGradientKey) {
     readinessTitle.textContent = "Waiting for credentials";
-    setupHint.textContent = "Add OG_PRIVATE_KEY to your environment, then refresh. The studio and launch checklist will unlock once the backend can sign OpenGradient requests.";
+    setupHint.textContent = "Add OG_PRIVATE_KEY to your environment, then refresh. The public studio will unlock once the backend can sign OpenGradient requests.";
     return;
   }
 
   if (!walletMeta.hasHealthyOpg) {
-    readinessTitle.textContent = "Top up the operator wallet";
-    setupHint.textContent = `Wallet ${walletMeta.wallet?.address || ""} is below the safe OPG floor. Add more OPG from the faucet before running more verified chats.`;
+    readinessTitle.textContent = "Operator wallet needs fuel";
+    setupHint.textContent = `The shared OpenGradient payment wallet ${walletMeta.wallet?.address || ""} is low on OPG. Top it up before inviting more public usage.`;
     return;
   }
 
   if (!state.config?.hasSupabase) {
     readinessTitle.textContent = "Memory layer offline";
-    setupHint.textContent = "Inference is ready, but Supabase memory is not configured. Add the project URL and a server-side key to unlock recall, profile stats, and the atlas tab.";
+    setupHint.textContent = "Inference is ready, but Supabase memory is not configured. Add the project URL and a server-side key to unlock recall for both guests and wallet-linked users.";
     return;
   }
 
-  readinessTitle.textContent = "Runtime is armed";
-  setupHint.textContent = `Wallet, memory, and deployment routes are lined up. Current memory footprint: ${profileStats?.storedMessages || 0} stored turns across ${profileStats?.threadsSeen || 0} threads.`;
+  if (state.session?.isWallet) {
+    readinessTitle.textContent = "Wallet-linked lane active";
+    setupHint.textContent = `${shortAddress(state.session.address)} is connected. Your prompts and recalled memory are now scoped to this wallet identity.`;
+    return;
+  }
+
+  readinessTitle.textContent = "Public guest mode is live";
+  setupHint.textContent = `Anyone can use the site right now. Current lane: guest mode, with ${profileStats?.storedMessages || 0} stored turns in this session. Connect a wallet to keep memory tied to one identity.`;
 }
 
 function renderFromState() {
-  const wallet = state.config?.walletStatus || null;
+  const operatorWallet = state.config?.walletStatus || null;
 
   modelValue.textContent = state.config?.model || "Unknown";
   settlementValue.textContent = state.config?.settlementType || "Unknown";
-  memoryStatus.textContent = state.config?.hasSupabase ? "online" : "offline";
-  walletStatus.textContent = wallet ? `${formatBalance(wallet.opgBalance)} OPG` : "missing";
-  walletBadgeValue.textContent = wallet ? `${formatBalance(wallet.opgBalance)} OPG` : "not ready";
+  memoryStatus.textContent = state.config?.hasSupabase ? getSessionModeLabel() : "offline";
+  walletStatus.textContent = operatorWallet ? `${formatBalance(operatorWallet.opgBalance)} OPG` : "missing";
+  identityBadgeValue.textContent = getSessionLabel();
   runtimeValue.textContent = state.config?.openGradientRuntime || "n/a";
 
+  updateWalletActionButton();
   renderThread();
   renderStatusStack();
   renderOverviewMetrics();
@@ -374,31 +495,175 @@ function renderFromState() {
   renderLaunch();
   renderReadinessNarrative();
 
-  userBio.textContent = state.profile?.user_bio || "Supabase memory summary not loaded yet.";
+  userBio.textContent = state.profile?.user_bio || "No scoped memory summary loaded yet.";
 }
 
-async function loadConfig() {
-  const response = await fetch("/api/config");
-  state.config = await response.json();
-  state.ready = Boolean(state.config.hasOpenGradientKey);
-  renderFromState();
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.error || "Request failed.");
+  }
+
+  return payload;
 }
 
-async function loadProfile() {
-  const response = await fetch("/api/profile");
-  const profile = await response.json();
+async function loadSession({ resetConversation = true } = {}) {
+  const payload = await fetchJson("/api/auth/session");
+  applySession(payload.session, { resetConversation });
+  return payload;
+}
+
+async function loadConfig({ syncSession = false } = {}) {
+  const payload = await fetchJson("/api/config");
+  state.config = payload;
+  state.ready = Boolean(payload.hasOpenGradientKey);
+
+  if (syncSession && payload.session) {
+    applySession(payload.session, { resetConversation: false });
+  } else {
+    renderFromState();
+  }
+}
+
+async function loadProfile({ syncSession = false } = {}) {
+  const profile = await fetchJson("/api/profile");
+
+  if (syncSession && profile.session) {
+    applySession(profile.session, { resetConversation: false });
+  }
 
   state.profile = profile.enabled
     ? profile
     : {
         enabled: false,
-        user_bio: "Supabase memory is not configured. Add SUPABASE_URL and a server-side key to unlock cloud recall.",
+        user_bio: state.session?.isWallet
+          ? `Wallet lane ${shortAddress(state.session.address)} is ready, but no memory has been stored yet.`
+          : "Guest mode is active. Connect a wallet for a persistent memory lane or start chatting to seed this guest session.",
         stats: null,
         insights: [],
         recent_memories: []
       };
 
   renderFromState();
+}
+
+async function signWalletMessage(address, message) {
+  try {
+    return await window.ethereum.request({
+      method: "personal_sign",
+      params: [message, address]
+    });
+  } catch (error) {
+    return window.ethereum.request({
+      method: "personal_sign",
+      params: [address, message]
+    });
+  }
+}
+
+async function connectWallet() {
+  if (!window.ethereum?.request) {
+    composerNote.textContent = "Install MetaMask, Rabby, or another injected EVM wallet to connect a wallet lane.";
+    return;
+  }
+
+  setWalletBusy(true, "Awaiting wallet...");
+
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const address = Array.isArray(accounts) ? accounts[0] : "";
+
+    if (!address) {
+      throw new Error("No wallet account was returned.");
+    }
+
+    setWalletBusy(true, "Awaiting signature...");
+    const challenge = await fetchJson("/api/auth/challenge", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ address })
+    });
+    const signature = await signWalletMessage(address, challenge.message);
+    const payload = await fetchJson("/api/auth/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        address,
+        signature,
+        challenge: challenge.challenge
+      })
+    });
+
+    applySession(payload.session);
+    composerNote.textContent = `Wallet ${shortAddress(payload.session.address)} connected. Your memory lane is now private to this address.`;
+    await loadConfig({ syncSession: true });
+    await loadProfile({ syncSession: true });
+  } catch (error) {
+    composerNote.textContent = error.message || "Wallet connection failed.";
+  } finally {
+    setWalletBusy(false);
+  }
+}
+
+async function switchToGuestMode(note = "You are back in guest mode.") {
+  setWalletBusy(true, "Switching...");
+
+  try {
+    const payload = await fetchJson("/api/auth/logout", { method: "POST" });
+    applySession(payload.session);
+    composerNote.textContent = note;
+    await loadConfig({ syncSession: true });
+    await loadProfile({ syncSession: true });
+  } catch (error) {
+    composerNote.textContent = error.message || "Failed to switch back to guest mode.";
+  } finally {
+    setWalletBusy(false);
+  }
+}
+
+async function handleWalletAction() {
+  if (state.session?.isWallet) {
+    await switchToGuestMode("Wallet lane disconnected. Public guest mode is active again.");
+    return;
+  }
+
+  await connectWallet();
+}
+
+async function handleAccountsChanged(accounts) {
+  state.providerAvailable = Boolean(window.ethereum?.request);
+  const nextAddress = Array.isArray(accounts) && accounts[0] ? String(accounts[0]).toLowerCase() : "";
+
+  if (!state.session?.isWallet) {
+    updateWalletActionButton();
+    return;
+  }
+
+  if (!nextAddress) {
+    await switchToGuestMode("Wallet disconnected in the provider. You are back in guest mode.");
+    return;
+  }
+
+  if (state.session.address?.toLowerCase() !== nextAddress) {
+    await switchToGuestMode("Wallet account changed. Connect again to bind a new memory lane.");
+  }
+}
+
+function attachWalletProviderListeners() {
+  if (!window.ethereum?.on) {
+    return;
+  }
+
+  window.ethereum.on("accountsChanged", handleAccountsChanged);
 }
 
 for (const button of tabButtons) {
@@ -414,6 +679,8 @@ for (const chip of promptChips) {
     promptInput.focus();
   });
 }
+
+walletActionButton.addEventListener("click", handleWalletAction);
 
 composer.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -431,7 +698,7 @@ composer.addEventListener("submit", async (event) => {
   setBusy(true);
 
   try {
-    const response = await fetch("/api/chat", {
+    const payload = await fetchJson("/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -443,14 +710,12 @@ composer.addEventListener("submit", async (event) => {
       })
     });
 
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload.error || "Request failed.");
+    if (payload.session) {
+      applySession(payload.session, { resetConversation: false });
     }
 
     state.threadId = payload.threadId;
-    window.localStorage.setItem("gradient-recall-thread", state.threadId);
+    persistThread();
     renderThread();
 
     appendMessage("assistant", payload.answer);
@@ -461,7 +726,7 @@ composer.addEventListener("submit", async (event) => {
         ? "Verified response received. Cloud memory is off."
         : `Verified response received. Memory note: ${payload.memoryStatus}`;
 
-    await loadProfile();
+    await loadProfile({ syncSession: true });
 
     const mergedRecentMemories = payload.memories?.length
       ? payload.memories
@@ -477,8 +742,17 @@ composer.addEventListener("submit", async (event) => {
 });
 
 setActiveTab(state.activeTab);
+resetChatLog();
 renderThread();
+updateWalletActionButton();
 setBusy(true);
+attachWalletProviderListeners();
 
-await loadConfig();
-await loadProfile();
+await loadSession();
+await loadConfig({ syncSession: true });
+await loadProfile({ syncSession: true });
+
+composerNote.textContent = state.session?.isWallet
+  ? "Wallet lane is ready for the next move."
+  : "Guest mode is ready. Connect a wallet if you want persistent recall.";
+setBusy(false);

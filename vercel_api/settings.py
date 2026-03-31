@@ -35,6 +35,7 @@ class AppConfig:
     rpc_url: str
     tee_registry_address: str
     open_gradient_key: str
+    session_secret: str
     supabase_url: str
     supabase_key: str
     supabase_user_id: str
@@ -51,6 +52,13 @@ class AppConfig:
             rpc_url=os.environ.get("OG_RPC_URL", DEFAULT_OG_RPC_URL),
             tee_registry_address=os.environ.get("OG_TEE_REGISTRY_ADDRESS", DEFAULT_TEE_REGISTRY_ADDRESS),
             open_gradient_key=os.environ.get("OG_PRIVATE_KEY", ""),
+            session_secret=(
+                os.environ.get("APP_SESSION_SECRET")
+                or os.environ.get("OG_PRIVATE_KEY", "")
+                or os.environ.get("SUPABASE_SECRET_KEY")
+                or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+                or "gradient-recall-dev-secret"
+            ),
             supabase_url=os.environ.get("SUPABASE_URL", ""),
             supabase_key=os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),
             supabase_user_id=os.environ.get("SUPABASE_USER_ID", "local-demo-user"),

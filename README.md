@@ -12,10 +12,11 @@ Gradient Recall is now a more product-shaped site built from the OpenGradient do
 ## What it does
 
 - Ships a multi-tab product surface: `Overview`, `Studio`, `Memory Atlas`, and `Launch`
+- Supports public guest sessions for anyone on the internet and wallet-linked sessions for users who want a private memory lane
 - Sends chat requests to `OpenGradient` through the official Python SDK
 - Stores conversation turns in `Supabase`
 - Recalls relevant recent context from Supabase before each reply
-- Exposes the same `/api/config`, `/api/profile`, `/api/chat`, and `/api/health` contract in both local dev and Vercel deployment
+- Exposes the same `/api/auth/session`, `/api/auth/challenge`, `/api/auth/verify`, `/api/auth/logout`, `/api/config`, `/api/profile`, `/api/chat`, and `/api/health` contract in both local dev and Vercel deployment
 
 ## Prerequisites
 
@@ -72,10 +73,11 @@ Useful docs:
    - `OG_RPC_URL`: defaults to `https://ogevmdevnet.opengradient.ai`
    - `OG_TEE_REGISTRY_ADDRESS`: defaults to the current OpenGradient LLM registry contract
    - `OG_PYTHON_EXECUTABLE`: optional override if you are not using `.venv-og`
+   - `APP_SESSION_SECRET`: optional but recommended custom secret for signing guest and wallet session cookies
    - `SUPABASE_URL`: your Supabase project URL
    - `SUPABASE_SECRET_KEY`: preferred server-side secret key
    - `SUPABASE_SERVICE_ROLE_KEY`: optional fallback if you are using the legacy service-role key instead
-   - `SUPABASE_USER_ID`: logical user namespace for saved memories
+   - `SUPABASE_USER_ID`: fallback namespace used only if no guest or wallet session is available
    - `SUPABASE_MEMORY_TABLE`: defaults to `gradient_memories`
 
 8. Run the one-time OPG approval check:
@@ -133,6 +135,7 @@ public/
   styles.css
 app.py
 vercel_api/
+  auth.py
   http_utils.py
   opengradient_runtime.py
   server_state.py
@@ -145,6 +148,7 @@ scripts/
 src/
   lib/
     opengradient.js
+    session-auth.js
     supabase-memory.js
   server.js
 supabase/
@@ -157,7 +161,9 @@ supabase/
 - The local Node server talks to OpenGradient through the official Python SDK bridge.
 - Vercel production uses the root Flask app in `app.py`, not the local bridge process.
 - Supabase is only used for cloud memory storage and recall.
+- The site is intentionally public: anyone can use guest mode immediately, and connected wallets get their own isolated memory scope.
 - Supabase keys in this demo are server-side only. Do not expose `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
+- Wallet connect uses an injected EVM wallet such as MetaMask or Rabby. The backend verifies a signed challenge before switching the visitor into a wallet-scoped memory lane.
 - If your older env still says `openai/gpt-4o`, the app will transparently map it to `anthropic/claude-haiku-4-5`.
 - Right now `anthropic/claude-haiku-4-5` and `google/gemini-2.5-flash` are the safest chat defaults for this demo.
 - If you hit `402 Payment Required`, run `npm.cmd run og:wallet` first. The most common cause is simply not having enough `OPG` left on Base Sepolia.
@@ -165,6 +171,5 @@ supabase/
 ## Good next steps
 
 - Add semantic recall with `pgvector`
-- Add authenticated multi-user memory instead of a fixed `SUPABASE_USER_ID`
 - Add streaming OpenGradient responses
 - Add a memory pinning workflow for important user facts
