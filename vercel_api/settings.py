@@ -57,7 +57,7 @@ class AppConfig:
                 or os.environ.get("OG_PRIVATE_KEY", "")
                 or os.environ.get("SUPABASE_SECRET_KEY")
                 or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-                or "gradient-recall-dev-secret"
+                or "recall-chat-dev-secret"
             ),
             supabase_url=os.environ.get("SUPABASE_URL", ""),
             supabase_key=os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", ""),

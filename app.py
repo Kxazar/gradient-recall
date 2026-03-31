@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
-from flask import Flask, jsonify, redirect, request
+from flask import Flask, jsonify, request
 
 from vercel_api.auth import (
     create_challenge,
@@ -17,12 +17,12 @@ from vercel_api.opengradient_runtime import chat as og_chat
 from vercel_api.opengradient_runtime import format_payment_error, get_wallet_status
 from vercel_api.server_state import build_system_prompt, config, memory_store, normalize_history
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="public", static_url_path="")
 
 
 @app.get("/")
 def home_route():
-    return redirect("/index.html", code=302)
+    return app.send_static_file("index.html")
 
 
 @app.get("/api/auth/session")
@@ -51,7 +51,7 @@ def auth_challenge_route():
         return jsonify({"error": "Wallet address is required."}), 400
 
     try:
-        return jsonify(create_challenge(address, request.host or "gradient-recall.local", config))
+        return jsonify(create_challenge(address, request.host or "recall-chat.local", config))
     except Exception as error:
         return jsonify({"error": str(error)}), 400
 

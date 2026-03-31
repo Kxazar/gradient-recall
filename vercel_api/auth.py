@@ -16,7 +16,7 @@ from web3 import Web3
 
 from .settings import AppConfig
 
-SESSION_COOKIE_NAME = "gradient_recall_session"
+SESSION_COOKIE_NAME = "recall_session"
 SESSION_TTL_SECONDS = 60 * 60 * 24 * 30
 CHALLENGE_TTL_SECONDS = 60 * 10
 
@@ -115,7 +115,7 @@ def _session_view(kind: str, subject: str) -> dict[str, Any]:
 def build_wallet_message(challenge_payload: dict[str, Any]) -> str:
     return "\n".join(
         [
-            "Gradient Recall Wallet Verification",
+            "Recall Wallet Verification",
             "",
             "Sign this message to bind your wallet to a private memory lane.",
             f"Domain: {challenge_payload['host']}",

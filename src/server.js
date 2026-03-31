@@ -40,7 +40,7 @@ const config = {
     process.env.OG_PRIVATE_KEY ||
     process.env.SUPABASE_SECRET_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    "gradient-recall-dev-secret",
+    "recall-chat-dev-secret",
   supabaseUrl: process.env.SUPABASE_URL || "",
   supabaseKey: process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   supabaseUserId: process.env.SUPABASE_USER_ID || "local-demo-user",
@@ -122,7 +122,7 @@ function normalizeHistory(history) {
 
 function buildSystemPrompt(memorySearchResult) {
   const basePrompt = [
-    "You are Gradient Recall, a practical assistant powered by OpenGradient's verified inference.",
+    "You are Recall, a practical assistant powered by OpenGradient's verified inference.",
     "Be concise, clear, and helpful.",
     "If memories are provided, use them only when relevant.",
     "Treat episodic memories as possibly time-bound and mention uncertainty when needed."
@@ -467,7 +467,7 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(config.port, () => {
-  console.log(`Gradient Recall is running at http://localhost:${config.port}`);
+  console.log(`Recall is running at http://localhost:${config.port}`);
 });
 
 export { server };

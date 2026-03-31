@@ -1,9 +1,9 @@
 {
-  "name": "gradient-recall",
+  "name": "recall-chat",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A lightweight OpenGradient demo app with Python-SDK-powered chat and Supabase cloud memory.",
+  "description": "A public memory-first chat app with OpenGradient inference and Supabase cloud recall.",
   "scripts": {
     "dev": "node --watch --env-file=.env src/server.js",
     "dev:vercel": "npx.cmd vercel dev",

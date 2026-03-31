@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 import { getAddress, isAddress, recoverMessageAddress } from "viem";
 
-export const SESSION_COOKIE_NAME = "gradient_recall_session";
+export const SESSION_COOKIE_NAME = "recall_session";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 const CHALLENGE_TTL_SECONDS = 60 * 10;
@@ -94,7 +94,7 @@ function sessionView(kind, subject) {
 
 export function buildWalletMessage(challengePayload) {
   return [
-    "Gradient Recall Wallet Verification",
+    "Recall Wallet Verification",
     "",
     "Sign this message to bind your wallet to a private memory lane.",
     `Domain: ${challengePayload.host}`,

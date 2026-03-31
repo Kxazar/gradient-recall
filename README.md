@@ -1,6 +1,6 @@
-# Gradient Recall
+# Recall
 
-Gradient Recall is now a more product-shaped site built from the OpenGradient docs. It keeps OpenGradient as the verified LLM provider, uses Supabase as the cloud memory layer, and ships with a Vercel-ready Flask API surface so the site can deploy cleanly without relying on a local `spawn()` bridge.
+Recall is a public, memory-first chat site built from the OpenGradient docs. It keeps OpenGradient as the verified LLM provider, uses Supabase as the cloud memory layer, and ships with a Vercel-ready Flask API surface so the site can deploy cleanly without relying on a local `spawn()` bridge.
 
 ## Why this architecture
 
@@ -11,7 +11,7 @@ Gradient Recall is now a more product-shaped site built from the OpenGradient do
 
 ## What it does
 
-- Ships a multi-tab product surface: `Overview`, `Studio`, `Memory Atlas`, and `Launch`
+- Ships a chat-first interface with a left prompt rail and a cleaner product surface
 - Supports public guest sessions for anyone on the internet and wallet-linked sessions for users who want a private memory lane
 - Sends chat requests to `OpenGradient` through the official Python SDK
 - Stores conversation turns in `Supabase`
