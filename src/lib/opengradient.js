@@ -8,7 +8,7 @@ export const DEFAULT_OG_RPC_URL = "https://ogevmdevnet.opengradient.ai";
 export const DEFAULT_TEE_REGISTRY_ADDRESS = "0x4e72238852f3c918f4E4e57AeC9280dDB0c80248";
 
 const MODEL_ALIASES = new Map([
-  ["openai/gpt-4o", "openai/gpt-5-mini"],
+  ["openai/gpt-4o", "anthropic/claude-haiku-4-5"],
   ["openai/gpt-4.1", "openai/gpt-4.1-2025-04-14"]
 ]);
 

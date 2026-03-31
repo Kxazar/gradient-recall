@@ -66,7 +66,7 @@ Useful docs:
 7. Fill in `.env`:
 
    - `OG_PRIVATE_KEY`: private key for the Base Sepolia wallet that will pay for inference
-   - `OG_MODEL`: supported OpenGradient model such as `anthropic/claude-haiku-4-5` or `openai/gpt-5-mini`
+   - `OG_MODEL`: supported OpenGradient model such as `anthropic/claude-haiku-4-5` or `google/gemini-2.5-flash`
    - `OG_SETTLEMENT_TYPE`: `individual`, `batch`, or `private`
    - `OG_RPC_URL`: defaults to `https://ogevmdevnet.opengradient.ai`
    - `OG_TEE_REGISTRY_ADDRESS`: defaults to the current OpenGradient LLM registry contract
@@ -118,7 +118,8 @@ supabase/
 - The Node server talks to OpenGradient through the official Python SDK bridge.
 - Supabase is only used for cloud memory storage and recall.
 - Supabase keys in this demo are server-side only. Do not expose `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
-- If your older env still says `openai/gpt-4o`, the app will transparently map it to `openai/gpt-5-mini`.
+- If your older env still says `openai/gpt-4o`, the app will transparently map it to `anthropic/claude-haiku-4-5`.
+- Right now `anthropic/claude-haiku-4-5` and `google/gemini-2.5-flash` are the safest chat defaults for this demo.
 - If you hit `402 Payment Required`, run `npm.cmd run og:wallet` first. The most common cause is simply not having enough `OPG` left on Base Sepolia.
 
 ## Good next steps

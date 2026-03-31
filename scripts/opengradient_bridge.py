@@ -19,7 +19,7 @@ BASE_SEPOLIA_RPC = "https://sepolia.base.org"
 BASE_OPG_ADDRESS = "0x240b09731D96979f50B2C649C9CE10FcF9C7987F"
 
 MODEL_ALIASES = {
-    "openai/gpt-4o": "openai/gpt-5-mini",
+    "openai/gpt-4o": "anthropic/claude-haiku-4-5",
     "openai/gpt-4.1": "openai/gpt-4.1-2025-04-14",
 }
 
@@ -192,6 +192,12 @@ async def run_chat(payload: dict[str, Any]) -> dict[str, Any]:
 
         chat_output = result.chat_output or {}
         content = extract_content(chat_output.get("content"))
+
+        if not content:
+            raise RuntimeError(
+                f"OpenGradient returned an empty assistant message for model '{model}'. "
+                "Try anthropic/claude-haiku-4-5 or google/gemini-2.5-flash."
+            )
 
         return {
             "ok": True,
