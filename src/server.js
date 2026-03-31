@@ -10,7 +10,6 @@ import {
   DEFAULT_OPEN_GRADIENT_MODEL,
   DEFAULT_TEE_REGISTRY_ADDRESS,
   normalizeOpenGradientModel,
-  normalizeOpenGradientServerUrl,
   normalizeOpenGradientSettlementType
 } from "./lib/opengradient.js";
 import { createSupabaseMemoryStore } from "./lib/supabase-memory.js";
@@ -26,7 +25,6 @@ const config = {
   settlementType: normalizeOpenGradientSettlementType(process.env.OG_SETTLEMENT_TYPE || "individual"),
   rpcUrl: process.env.OG_RPC_URL || DEFAULT_OG_RPC_URL,
   teeRegistryAddress: process.env.OG_TEE_REGISTRY_ADDRESS || DEFAULT_TEE_REGISTRY_ADDRESS,
-  llmServerUrl: normalizeOpenGradientServerUrl(process.env.OG_LLM_SERVER_URL || process.env.OG_API_BASE_URL || ""),
   pythonExecutable: process.env.OG_PYTHON_EXECUTABLE || "",
   openGradientKey: process.env.OG_PRIVATE_KEY || "",
   supabaseUrl: process.env.SUPABASE_URL || "",
@@ -45,8 +43,7 @@ const openGradientClient = config.openGradientKey
       settlementType: config.settlementType,
       pythonExecutable: config.pythonExecutable,
       rpcUrl: config.rpcUrl,
-      teeRegistryAddress: config.teeRegistryAddress,
-      llmServerUrl: config.llmServerUrl
+      teeRegistryAddress: config.teeRegistryAddress
     })
   : null;
 

@@ -45,7 +45,7 @@ Useful docs:
    ```powershell
    py -3.11 -m venv .venv-og
    .\.venv-og\Scripts\python.exe -m pip install --upgrade pip
-   .\.venv-og\Scripts\python.exe -m pip install opengradient==0.9.3
+   .\.venv-og\Scripts\python.exe -m pip install opengradient==0.9.4
    ```
 
 3. Create a Supabase project.
@@ -70,7 +70,6 @@ Useful docs:
    - `OG_SETTLEMENT_TYPE`: `individual`, `batch`, or `private`
    - `OG_RPC_URL`: defaults to `https://ogevmdevnet.opengradient.ai`
    - `OG_TEE_REGISTRY_ADDRESS`: defaults to the current OpenGradient LLM registry contract
-   - `OG_LLM_SERVER_URL`: optional explicit TEE URL override; leave empty to use registry discovery
    - `OG_PYTHON_EXECUTABLE`: optional override if you are not using `.venv-og`
    - `SUPABASE_URL`: your Supabase project URL
    - `SUPABASE_SECRET_KEY`: preferred server-side secret key

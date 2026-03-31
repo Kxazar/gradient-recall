@@ -161,13 +161,11 @@ def extract_content(raw_content: Any) -> str:
 def build_client() -> LLM:
     rpc_url = (os.environ.get("OG_RPC_URL") or DEFAULT_RPC_URL).strip()
     tee_registry_address = (os.environ.get("OG_TEE_REGISTRY_ADDRESS") or DEFAULT_TEE_REGISTRY_ADDRESS).strip()
-    llm_server_url = (os.environ.get("OG_LLM_SERVER_URL") or "").strip() or None
 
     return LLM(
         private_key=normalize_private_key(),
         rpc_url=rpc_url,
         tee_registry_address=tee_registry_address,
-        llm_server_url=llm_server_url,
     )
 
 
@@ -215,19 +213,27 @@ async def run_chat(payload: dict[str, Any]) -> dict[str, Any]:
 
 async def run_approval(payload: dict[str, Any]) -> dict[str, Any]:
     try:
-        opg_amount = float(payload.get("opgAmount", 0.1))
+        min_allowance = float(payload.get("minAllowance", 0.1))
     except (TypeError, ValueError) as error:
-        raise ValueError("opgAmount must be a number.") from error
+        raise ValueError("minAllowance must be a number.") from error
+
+    raw_approve_amount = payload.get("approveAmount", min_allowance)
+
+    try:
+        approve_amount = float(raw_approve_amount) if raw_approve_amount is not None else None
+    except (TypeError, ValueError) as error:
+        raise ValueError("approveAmount must be a number or null.") from error
 
     client: LLM | None = None
 
     try:
         client = build_client()
-        result = client.ensure_opg_approval(opg_amount=opg_amount)
+        result = client.ensure_opg_approval(min_allowance=min_allowance, approve_amount=approve_amount)
 
         return {
             "ok": True,
-            "opgAmount": opg_amount,
+            "minAllowance": min_allowance,
+            "approveAmount": approve_amount,
             "allowanceBefore": str(result.allowance_before),
             "allowanceAfter": str(result.allowance_after),
             "txHash": result.tx_hash,

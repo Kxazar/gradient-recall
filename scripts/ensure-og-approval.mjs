@@ -15,12 +15,11 @@ const client = createOpenGradientClient({
   settlementType: process.env.OG_SETTLEMENT_TYPE || "individual",
   pythonExecutable: process.env.OG_PYTHON_EXECUTABLE || "",
   rpcUrl: process.env.OG_RPC_URL || undefined,
-  teeRegistryAddress: process.env.OG_TEE_REGISTRY_ADDRESS || undefined,
-  llmServerUrl: process.env.OG_LLM_SERVER_URL || process.env.OG_API_BASE_URL || ""
+  teeRegistryAddress: process.env.OG_TEE_REGISTRY_ADDRESS || undefined
 });
 
 try {
-  const result = await client.ensureApproval(amount);
+  const result = await client.ensureApproval(amount, amount);
   console.log(`Approval checked for ${amount} OPG.`);
   console.log(`Allowance before: ${result.allowanceBefore}`);
   console.log(`Allowance after: ${result.allowanceAfter}`);

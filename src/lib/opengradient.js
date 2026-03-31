@@ -7,11 +7,6 @@ export const DEFAULT_OPEN_GRADIENT_MODEL = "anthropic/claude-haiku-4-5";
 export const DEFAULT_OG_RPC_URL = "https://ogevmdevnet.opengradient.ai";
 export const DEFAULT_TEE_REGISTRY_ADDRESS = "0x4e72238852f3c918f4E4e57AeC9280dDB0c80248";
 
-const LEGACY_DOCS_HOSTS = new Set([
-  "https://llm.opengradient.ai",
-  "https://llmogevm.opengradient.ai"
-]);
-
 const MODEL_ALIASES = new Map([
   ["openai/gpt-4o", "openai/gpt-5-mini"],
   ["openai/gpt-4.1", "openai/gpt-4.1-2025-04-14"]
@@ -56,11 +51,6 @@ export function normalizeOpenGradientModel(model = DEFAULT_OPEN_GRADIENT_MODEL) 
 export function normalizeOpenGradientSettlementType(settlementType = "individual") {
   const normalized = (settlementType || "").trim().toLowerCase();
   return SUPPORTED_SETTLEMENT_TYPES.has(normalized) ? normalized : "individual";
-}
-
-export function normalizeOpenGradientServerUrl(serverUrl = "") {
-  const normalized = (serverUrl || "").trim().replace(/\/$/, "");
-  return LEGACY_DOCS_HOSTS.has(normalized) ? "" : normalized;
 }
 
 async function resolvePythonExecutable(explicitExecutable = "") {
@@ -180,13 +170,11 @@ export function createOpenGradientClient({
   settlementType = "individual",
   pythonExecutable = "",
   rpcUrl = DEFAULT_OG_RPC_URL,
-  teeRegistryAddress = DEFAULT_TEE_REGISTRY_ADDRESS,
-  llmServerUrl = ""
+  teeRegistryAddress = DEFAULT_TEE_REGISTRY_ADDRESS
 }) {
   const normalizedKey = normalizePrivateKey(privateKey);
   const normalizedModel = normalizeOpenGradientModel(model);
   const normalizedSettlementType = normalizeOpenGradientSettlementType(settlementType);
-  const normalizedServerUrl = normalizeOpenGradientServerUrl(llmServerUrl);
   let runtimePromise;
 
   async function getRuntime() {
@@ -199,8 +187,7 @@ export function createOpenGradientClient({
       envOverrides: {
         OG_PRIVATE_KEY: normalizedKey,
         OG_RPC_URL: rpcUrl,
-        OG_TEE_REGISTRY_ADDRESS: teeRegistryAddress,
-        OG_LLM_SERVER_URL: normalizedServerUrl
+        OG_TEE_REGISTRY_ADDRESS: teeRegistryAddress
       }
     }))();
 
@@ -218,16 +205,16 @@ export function createOpenGradientClient({
         bridgeScript: bridgeScriptPath,
         model: normalizedModel,
         settlementType: normalizedSettlementType,
-        endpointStrategy: normalizedServerUrl ? "explicit-tee-url" : "registry-discovery"
+        endpointStrategy: "registry-discovery"
       };
     },
 
-    async ensureApproval(opgAmount = 0.1) {
+    async ensureApproval(minAllowance = 0.1, approveAmount = minAllowance) {
       const runtime = await getRuntime();
 
       return runBridgeCommand({
         action: "approve",
-        payload: { opgAmount },
+        payload: { minAllowance, approveAmount },
         envOverrides: runtime.envOverrides,
         pythonExecutable: runtime.pythonExecutable
       });
